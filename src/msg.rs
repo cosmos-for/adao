@@ -1,9 +1,34 @@
-use cosmwasm_std::StdResult;
+use cosmwasm_std::{StdResult, Addr, Deps};
 use serde::{Deserialize, Serialize};
+
+use crate::state::ADMINS;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct InstantiateMsg {
+    pub admins: Vec<String>,
+}
+
+impl InstantiateMsg {
+    pub fn new(admins: Vec<String>) -> Self {
+        Self { admins }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum QueryMsg {
     Greet {},
+    AdminsList {},
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct AdminsListResp {
+    pub admins: Vec<Addr>,
+}
+
+impl AdminsListResp {
+    pub fn new(admins: Vec<Addr>) -> Self {
+        Self { admins }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -17,6 +42,12 @@ impl GreetResp {
             message: message.into(),
         }
     }
+}
+
+pub fn admins_list(deps: Deps) -> StdResult<AdminsListResp> {
+    let admins = ADMINS.load(deps.storage)?;
+    let resp = AdminsListResp { admins };
+    Ok(resp)
 }
 
 pub fn greet() -> StdResult<GreetResp> {
