@@ -1,7 +1,9 @@
-use crate::msg::{self, QueryMsg, InstantiateMsg};
-use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
+use crate::{
+    error::ContractError,
+    exec,
+    msg::{self, ExecuteMsg, InstantiateMsg, QueryMsg},
 };
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
 use crate::state::ADMINS;
 
@@ -27,40 +29,50 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
     match msg {
         Greet {} => to_binary(&msg::greet()?),
-        AdminsList {  } => to_binary(&msg::admins_list(deps)?),
+        AdminsList {} => to_binary(&msg::admins_list(deps)?),
     }
 }
 
-#[allow(dead_code)]
 pub fn execute(
-    _deps: DepsMut,
+    deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
-    _msg: Empty,
-) -> StdResult<Response> {
-    unimplemented!()
+    info: MessageInfo,
+    msg: ExecuteMsg,
+) -> Result<Response, ContractError> {
+    use ExecuteMsg::*;
+
+    match msg {
+        AddMemebers { admins } => exec::add_members(deps, info, admins),
+        Leave {} => exec::leave(deps, info).map_err(Into::into),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::{from_binary, Addr};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{from_binary, Addr};
     use cw_multi_test::{App, ContractWrapper, Executor};
 
     use crate::contract::instantiate;
-    use crate::msg::{GreetResp, QueryMsg, InstantiateMsg, AdminsListResp};
+    use crate::error::ContractError;
+    use crate::msg::{AdminsListResp, ExecuteMsg, GreetResp, InstantiateMsg, QueryMsg};
 
-    use super::{query, execute};
+    use super::{execute, query};
 
     #[test]
     fn greet_query_test() {
         let mut deps = mock_dependencies();
         let env = mock_env();
 
-        instantiate(deps.as_mut(), env.clone(), mock_info("sender", &[]), InstantiateMsg::default())
-            .unwrap();
-        
-        let resp = query(deps.as_ref(), env, QueryMsg::Greet { }).unwrap();
+        instantiate(
+            deps.as_mut(),
+            env.clone(),
+            mock_info("sender", &[]),
+            InstantiateMsg::default(),
+        )
+        .unwrap();
+
+        let resp = query(deps.as_ref(), env, QueryMsg::Greet {}).unwrap();
 
         let resp: GreetResp = from_binary(&resp).unwrap();
 
@@ -70,12 +82,19 @@ mod tests {
     #[test]
     fn contract_multi_tests_work() {
         let mut app = App::default();
-        
+
         let code = ContractWrapper::new(execute, instantiate, query);
         let code_id = app.store_code(Box::new(code));
 
         let addr = app
-            .instantiate_contract(code_id, Addr::unchecked("owner"), &InstantiateMsg::default(), &[], "Contract", None)
+            .instantiate_contract(
+                code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg::default(),
+                &[],
+                "Contract",
+                None,
+            )
             .unwrap();
 
         let resp: GreetResp = app
@@ -83,13 +102,10 @@ mod tests {
             .query_wasm_smart(addr, &QueryMsg::Greet {})
             .unwrap();
 
-        assert_eq!(
-            resp,
-            GreetResp::new("hello world!"),
-        );
+        assert_eq!(resp, GreetResp::new("hello world!"),);
     }
 
-    #[test] 
+    #[test]
     fn instantiate_test() {
         let mut app = App::default();
 
@@ -98,7 +114,7 @@ mod tests {
 
         let addr = app
             .instantiate_contract(
-                code_id, 
+                code_id,
                 Addr::unchecked("owner"),
                 &InstantiateMsg::default(),
                 &[],
@@ -109,17 +125,14 @@ mod tests {
 
         let resp: AdminsListResp = app
             .wrap()
-            .query_wasm_smart(addr, &QueryMsg::AdminsList {  })
+            .query_wasm_smart(addr, &QueryMsg::AdminsList {})
             .unwrap();
 
-        assert_eq!(
-            resp,
-            AdminsListResp::default(),
-        );
+        assert_eq!(resp, AdminsListResp::default(),);
 
         let addr = app
             .instantiate_contract(
-                code_id, 
+                code_id,
                 Addr::unchecked("owner"),
                 &InstantiateMsg::new(vec!["admin1".to_string(), "admin2".to_string()]),
                 &[],
@@ -127,16 +140,52 @@ mod tests {
                 None,
             )
             .unwrap();
-    
+
         let resp: AdminsListResp = app
             .wrap()
-            .query_wasm_smart(addr, &QueryMsg::AdminsList {  })
+            .query_wasm_smart(addr, &QueryMsg::AdminsList {})
             .unwrap();
 
         assert_eq!(
             resp,
             AdminsListResp::new(vec![Addr::unchecked("admin1"), Addr::unchecked("admin2")]),
         )
+    }
 
+    #[test]
+    fn unauthorized_test() {
+        let mut app = App::default();
+
+        let code = ContractWrapper::new(execute, instantiate, query);
+        let code_id = app.store_code(Box::new(code));
+
+        let addr = app
+            .instantiate_contract(
+                code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg::default(),
+                &[],
+                "Contract",
+                None,
+            )
+            .unwrap();
+
+        let err = app
+            .execute_contract(
+                Addr::unchecked("user"),
+                addr,
+                &ExecuteMsg::AddMemebers {
+                    admins: vec!["user".to_string()],
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            ContractError::Unauthorized {
+                sender: Addr::unchecked("user")
+            },
+            err.downcast().unwrap()
+        )
     }
 }

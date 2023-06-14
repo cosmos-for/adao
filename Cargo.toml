@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 cosmwasm-std = { version = "1", features = ["staking"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 cw-storage-plus = "1"
+thiserror = "1"
 
 [dev-dependencies]
 cw-multi-test = "0"

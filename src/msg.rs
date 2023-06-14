@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdResult, Addr, Deps};
+use cosmwasm_std::{Addr, Deps, StdResult};
 use serde::{Deserialize, Serialize};
 
 use crate::state::ADMINS;
@@ -26,6 +26,7 @@ pub struct AdminsListResp {
 }
 
 impl AdminsListResp {
+    #[allow(dead_code)]
     pub fn new(admins: Vec<Addr>) -> Self {
         Self { admins }
     }
@@ -42,6 +43,12 @@ impl GreetResp {
             message: message.into(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ExecuteMsg {
+    AddMemebers { admins: Vec<String> },
+    Leave {},
 }
 
 pub fn admins_list(deps: Deps) -> StdResult<AdminsListResp> {
