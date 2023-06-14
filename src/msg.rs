@@ -6,11 +6,15 @@ use crate::state::ADMINS;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct InstantiateMsg {
     pub admins: Vec<String>,
+    pub donation_denom: String,
 }
 
 impl InstantiateMsg {
-    pub fn new(admins: Vec<String>) -> Self {
-        Self { admins }
+    pub fn new(admins: Vec<String>, donation_denom: impl Into<String>) -> Self {
+        Self {
+            admins,
+            donation_denom: donation_denom.into(),
+        }
     }
 }
 
@@ -49,6 +53,7 @@ impl GreetResp {
 pub enum ExecuteMsg {
     AddMemebers { admins: Vec<String> },
     Leave {},
+    Donate {},
 }
 
 pub fn admins_list(deps: Deps) -> StdResult<AdminsListResp> {

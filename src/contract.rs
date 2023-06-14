@@ -2,6 +2,7 @@ use crate::{
     error::ContractError,
     exec,
     msg::{self, ExecuteMsg, InstantiateMsg, QueryMsg},
+    state::DONATION_DENOM,
 };
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
@@ -20,6 +21,7 @@ pub fn instantiate(
         .collect();
 
     ADMINS.save(deps.storage, &admins?)?;
+    DONATION_DENOM.save(deps.storage, &msg.donation_denom)?;
 
     Ok(Response::new())
 }
@@ -44,13 +46,14 @@ pub fn execute(
     match msg {
         AddMemebers { admins } => exec::add_members(deps, info, admins),
         Leave {} => exec::leave(deps, info).map_err(Into::into),
+        Donate {} => exec::donate(deps, info),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{from_binary, Addr};
+    use cosmwasm_std::{coins, from_binary, Addr};
     use cw_multi_test::{App, ContractWrapper, Executor};
 
     use crate::contract::instantiate;
@@ -134,7 +137,7 @@ mod tests {
             .instantiate_contract(
                 code_id,
                 Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["admin1".to_string(), "admin2".to_string()]),
+                &InstantiateMsg::new(vec!["admin1".to_string(), "admin2".to_string()], "wasm"),
                 &[],
                 "Contract2",
                 None,
@@ -163,7 +166,7 @@ mod tests {
             .instantiate_contract(
                 code_id,
                 Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["owner".to_owned()]),
+                &InstantiateMsg::new(vec!["owner".to_owned()], "wasm"),
                 &[],
                 "Contract",
                 None,
@@ -233,7 +236,7 @@ mod tests {
             .instantiate_contract(
                 code_id,
                 Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["owner".to_owned()]),
+                &InstantiateMsg::new(vec!["owner".to_owned()], "wasm"),
                 &[],
                 "Contract",
                 None,
@@ -257,5 +260,49 @@ mod tests {
             },
             err.downcast().unwrap()
         )
+    }
+
+    #[test]
+    fn donate_test() {
+        let mut app = App::new(|router, _, storage| {
+            router
+                .bank
+                .init_balance(storage, &Addr::unchecked("user"), coins(5, "eth"))
+                .unwrap()
+        });
+
+        let code = ContractWrapper::new(execute, instantiate, query);
+        let code_id = app.store_code(Box::new(code));
+
+        let addr = app
+            .instantiate_contract(
+                code_id,
+                Addr::unchecked("owner".to_owned()),
+                &InstantiateMsg::new(vec!["admin1".to_owned(), "admin2".to_owned()], "eth"),
+                &[],
+                "Contract",
+                None,
+            )
+            .unwrap();
+
+        app.execute_contract(
+            Addr::unchecked("user"),
+            addr.clone(),
+            &ExecuteMsg::Donate {},
+            &coins(2, "eth"),
+        )
+        .unwrap();
+
+        assert_eq!(get_balance(&app, "user", "eth"), 3,);
+
+        assert_eq!(get_balance(&app, "admin1", "eth"), 1,);
+
+        assert_eq!(get_balance(&app, "admin2", "eth"), 1,);
+
+        assert_eq!(get_balance(&app, addr.as_str(), "eth"), 0,);
+    }
+
+    fn get_balance(app: &App, addr: &str, denom: &str) -> u128 {
+        app.wrap().query_balance(addr, denom).unwrap().amount.u128()
     }
 }
