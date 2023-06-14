@@ -153,6 +153,76 @@ mod tests {
     }
 
     #[test]
+    fn add_members_test() {
+        let mut app = App::default();
+
+        let code = ContractWrapper::new(execute, instantiate, query);
+        let code_id = app.store_code(Box::new(code));
+
+        let addr = app
+            .instantiate_contract(
+                code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg::new(vec!["owner".to_owned()]),
+                &[],
+                "Contract",
+                None,
+            )
+            .unwrap();
+
+        let resp = app
+            .execute_contract(
+                Addr::unchecked("owner"),
+                addr,
+                &ExecuteMsg::AddMemebers {
+                    admins: vec!["user".to_owned()],
+                },
+                &[],
+            )
+            .unwrap();
+
+        let wasm_events = resp.events.iter().find(|e| e.ty == "wasm").unwrap();
+
+        assert_eq!(
+            wasm_events
+                .attributes
+                .iter()
+                .find(|a| a.key == "action")
+                .unwrap()
+                .value,
+            "add_members"
+        );
+
+        assert_eq!(
+            wasm_events
+                .attributes
+                .iter()
+                .find(|a| a.key == "added_count")
+                .unwrap()
+                .value,
+            "1"
+        );
+
+        let admin_added_events: Vec<_> = resp
+            .events
+            .iter()
+            .filter(|ev| ev.ty == "wasm-admin_added")
+            .collect();
+
+        assert_eq!(admin_added_events.len(), 1);
+
+        assert_eq!(
+            admin_added_events[0]
+                .attributes
+                .iter()
+                .find(|a| a.key == "addr")
+                .unwrap()
+                .value,
+            "user",
+        );
+    }
+
+    #[test]
     fn unauthorized_test() {
         let mut app = App::default();
 
@@ -163,7 +233,7 @@ mod tests {
             .instantiate_contract(
                 code_id,
                 Addr::unchecked("owner"),
-                &InstantiateMsg::default(),
+                &InstantiateMsg::new(vec!["owner".to_owned()]),
                 &[],
                 "Contract",
                 None,

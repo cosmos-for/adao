@@ -1,4 +1,4 @@
-use cosmwasm_std::{DepsMut, MessageInfo, Response, StdResult};
+use cosmwasm_std::{DepsMut, Event, MessageInfo, Response, StdResult};
 
 use crate::{error::ContractError, state::ADMINS};
 
@@ -15,6 +15,17 @@ pub fn add_members(
         });
     }
 
+    let events = admins
+        .iter()
+        // the event key will has a prefix "wasm-" in event, e.g. the key is `wasm-admin_added` here
+        .map(|admin| Event::new("admin_added").add_attribute("addr", admin));
+
+    let resp = Response::new()
+        .add_events(events)
+        // the event key will be "wasm" in attribute, e.g. the key is `wasm` here
+        .add_attribute("action", "add_members")
+        .add_attribute("added_count", admins.len().to_string());
+
     let admins: StdResult<Vec<_>> = admins
         .into_iter()
         .map(|addr| deps.api.addr_validate(&addr))
@@ -24,7 +35,7 @@ pub fn add_members(
 
     ADMINS.save(deps.storage, &curr_admins)?;
 
-    Ok(Response::new())
+    Ok(resp)
 }
 
 pub fn leave(deps: DepsMut, info: MessageInfo) -> StdResult<Response> {
