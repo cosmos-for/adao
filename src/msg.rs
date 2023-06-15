@@ -1,9 +1,10 @@
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Deps, StdResult};
-use serde::{Deserialize, Serialize};
 
 use crate::state::ADMINS;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[cw_serde]
+#[derive(Default)]
 pub struct InstantiateMsg {
     pub admins: Vec<String>,
     pub donation_denom: String,
@@ -18,13 +19,17 @@ impl InstantiateMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(GreetResp)]
     Greet {},
+    #[returns(AdminsListResp)]
     AdminsList {},
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[cw_serde]
+#[derive(Default)]
 pub struct AdminsListResp {
     pub admins: Vec<Addr>,
 }
@@ -36,7 +41,7 @@ impl AdminsListResp {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cw_serde]
 pub struct GreetResp {
     pub message: String,
 }
@@ -49,7 +54,7 @@ impl GreetResp {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cw_serde]
 pub enum ExecuteMsg {
     AddMemebers { admins: Vec<String> },
     Leave {},
