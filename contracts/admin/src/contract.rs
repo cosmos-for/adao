@@ -4,7 +4,9 @@ use crate::{
     msg::{self, ExecuteMsg, InstantiateMsg, QueryMsg},
     state::DONATION_DENOM,
 };
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
+};
 
 use crate::state::ADMINS;
 
@@ -14,13 +16,11 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
-    let admins: StdResult<Vec<_>> = msg
-        .admins
-        .into_iter()
-        .map(|addr| deps.api.addr_validate(&addr))
-        .collect();
+    for addr in msg.admins {
+        let admin = deps.api.addr_validate(&addr)?;
+        ADMINS.save(deps.storage, &admin, &Empty {})?;
+    }
 
-    ADMINS.save(deps.storage, &admins?)?;
     DONATION_DENOM.save(deps.storage, &msg.donation_denom)?;
 
     Ok(Response::new())
@@ -51,6 +51,8 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use cosmwasm_std::{coins, Addr};
     use cw_multi_test::{App, ContractWrapper, Executor};
 
@@ -59,6 +61,11 @@ mod tests {
     use crate::msg::{AdminsListResp, ExecuteMsg, InstantiateMsg, QueryMsg};
 
     use super::{execute, query};
+
+    const OWNER: &str = "cosmos1z046yq9fzdf4ll4gkqg3pzgzguzscfmrjevdz2";
+    const USER: &str = "cosmos10uvqq6fd7aqn5yq3aczha3r0956yecxmmj3aev";
+    const ADMIN1: &str = "cosmos1kajjl5f959kdf4hdjpa0r8cuvg6au5rr6rxrl6";
+    const ADMIN2: &str = "cosmos1cdn6hcs76r548k5a672zd9aueff9rukeupzdpf";
 
     #[test]
     fn instantiate_test() {
@@ -70,7 +77,7 @@ mod tests {
         let addr = app
             .instantiate_contract(
                 code_id,
-                Addr::unchecked("owner"),
+                Addr::unchecked(OWNER),
                 &InstantiateMsg::default(),
                 &[],
                 "Contract",
@@ -88,8 +95,8 @@ mod tests {
         let addr = app
             .instantiate_contract(
                 code_id,
-                Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["admin1".to_string(), "admin2".to_string()], "wasm"),
+                Addr::unchecked(OWNER),
+                &InstantiateMsg::new(vec![ADMIN1.to_string(), ADMIN2.to_string()], "wasm"),
                 &[],
                 "Contract2",
                 None,
@@ -102,8 +109,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            resp,
-            AdminsListResp::new(vec![Addr::unchecked("admin1"), Addr::unchecked("admin2")]),
+            BTreeSet::from_iter(resp.admins.iter()),
+            BTreeSet::from_iter(
+                AdminsListResp::new(vec![Addr::unchecked(ADMIN1), Addr::unchecked(ADMIN2)])
+                    .admins
+                    .iter()
+            ),
         )
     }
 
@@ -117,8 +128,8 @@ mod tests {
         let addr = app
             .instantiate_contract(
                 code_id,
-                Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["owner".to_owned()], "wasm"),
+                Addr::unchecked(OWNER),
+                &InstantiateMsg::new(vec![OWNER.to_owned()], "wasm"),
                 &[],
                 "Contract",
                 None,
@@ -127,10 +138,10 @@ mod tests {
 
         let resp = app
             .execute_contract(
-                Addr::unchecked("owner"),
+                Addr::unchecked(OWNER),
                 addr,
                 &ExecuteMsg::AddMemebers {
-                    admins: vec!["user".to_owned()],
+                    admins: vec![USER.to_owned()],
                 },
                 &[],
             )
@@ -173,7 +184,7 @@ mod tests {
                 .find(|a| a.key == "addr")
                 .unwrap()
                 .value,
-            "user",
+            USER,
         );
     }
 
@@ -187,8 +198,8 @@ mod tests {
         let addr = app
             .instantiate_contract(
                 code_id,
-                Addr::unchecked("owner"),
-                &InstantiateMsg::new(vec!["owner".to_owned()], "wasm"),
+                Addr::unchecked(OWNER),
+                &InstantiateMsg::new(vec![OWNER.to_owned()], "wasm"),
                 &[],
                 "Contract",
                 None,
@@ -197,10 +208,10 @@ mod tests {
 
         let err = app
             .execute_contract(
-                Addr::unchecked("user"),
+                Addr::unchecked(USER),
                 addr,
                 &ExecuteMsg::AddMemebers {
-                    admins: vec!["user".to_string()],
+                    admins: vec![USER.to_string()],
                 },
                 &[],
             )
@@ -208,7 +219,7 @@ mod tests {
 
         assert_eq!(
             ContractError::Unauthorized {
-                sender: Addr::unchecked("user")
+                sender: Addr::unchecked(USER)
             },
             err.downcast().unwrap()
         )
@@ -219,7 +230,7 @@ mod tests {
         let mut app = App::new(|router, _, storage| {
             router
                 .bank
-                .init_balance(storage, &Addr::unchecked("user"), coins(5, "eth"))
+                .init_balance(storage, &Addr::unchecked(USER), coins(5, "eth"))
                 .unwrap()
         });
 
@@ -229,8 +240,8 @@ mod tests {
         let addr = app
             .instantiate_contract(
                 code_id,
-                Addr::unchecked("owner".to_owned()),
-                &InstantiateMsg::new(vec!["admin1".to_owned(), "admin2".to_owned()], "eth"),
+                Addr::unchecked(OWNER.to_owned()),
+                &InstantiateMsg::new(vec![ADMIN1.to_owned(), ADMIN2.to_owned()], "eth"),
                 &[],
                 "Contract",
                 None,
@@ -238,18 +249,18 @@ mod tests {
             .unwrap();
 
         app.execute_contract(
-            Addr::unchecked("user"),
+            Addr::unchecked(USER),
             addr.clone(),
             &ExecuteMsg::Donate {},
             &coins(3, "eth"),
         )
         .unwrap();
 
-        assert_eq!(get_balance(&app, "user", "eth"), 2,);
+        assert_eq!(get_balance(&app, USER, "eth"), 2,);
 
-        assert_eq!(get_balance(&app, "admin1", "eth"), 1,);
+        assert_eq!(get_balance(&app, ADMIN1, "eth"), 1,);
 
-        assert_eq!(get_balance(&app, "admin2", "eth"), 1,);
+        assert_eq!(get_balance(&app, ADMIN2, "eth"), 1,);
 
         assert_eq!(get_balance(&app, addr.as_str(), "eth"), 1,);
     }

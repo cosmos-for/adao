@@ -1,4 +1,8 @@
-use cosmwasm_std::{coins, BankMsg, DepsMut, Event, MessageInfo, Response, StdResult};
+use std::collections::HashSet;
+
+use cosmwasm_std::{
+    coins, BankMsg, DepsMut, Empty, Event, MessageInfo, Order, Response, StdResult,
+};
 
 use crate::{
     error::ContractError,
@@ -10,24 +14,19 @@ pub fn add_members(
     info: MessageInfo,
     admins: Vec<String>,
 ) -> Result<Response, ContractError> {
-    let mut curr_admins = ADMINS.load(deps.storage)?;
+    // let mut curr_admins = ADMINS.load(deps.storage)?;
+    // let admins: Result<Vec<_>, _> = ADMINS
+    //     .keys(deps.storage, None, None, Order::Ascending)
+    //     .collect();
+    // let admin = admins?;
 
-    if !curr_admins.contains(&info.sender) {
+    if !ADMINS.has(deps.storage, &info.sender) {
         return Err(ContractError::Unauthorized {
             sender: info.sender,
         });
     }
 
-    let owners: Vec<_> = admins
-        .iter()
-        .filter(|a| *a == &info.sender.to_string())
-        .collect();
-
-    if owners.len() > 1 {
-        return Err(ContractError::TwiceAuthorizedError {
-            sender: info.sender,
-        });
-    }
+    let admins: HashSet<String> = HashSet::from_iter(admins.into_iter());
 
     let events = admins
         .iter()
@@ -40,34 +39,42 @@ pub fn add_members(
         .add_attribute("action", "add_members")
         .add_attribute("added_count", admins.len().to_string());
 
-    let admins: StdResult<Vec<_>> = admins
-        .into_iter()
-        .map(|addr| deps.api.addr_validate(&addr))
-        .collect();
+    for addr in &admins {
+        let admin = deps.api.addr_validate(addr)?;
+        if !ADMINS.has(deps.storage, &admin) {
+            ADMINS.save(deps.storage, &admin, &Empty {})?;
+        }
+    }
 
-    curr_admins.append(&mut admins?);
+    // let admins: StdResult<Vec<_>> = admins
+    //     .into_iter()
+    //     .map(|addr| deps.api.addr_validate(&addr))
+    //     .collect();
 
-    ADMINS.save(deps.storage, &curr_admins)?;
+    // curr_admins.append(&mut admins?);
+
+    // ADMINS.save(deps.storage, &curr_admins)?;
 
     Ok(resp)
 }
 
 pub fn leave(deps: DepsMut, info: MessageInfo) -> StdResult<Response> {
-    ADMINS.update(deps.storage, move |admins| -> StdResult<_> {
-        let admins = admins
-            .into_iter()
-            .filter(|addr| *addr != info.sender)
-            .collect();
+    ADMINS.remove(deps.storage, &info.sender);
 
-        Ok(admins)
-    })?;
+    let resp = Response::new()
+        .add_attribute("action", "leave")
+        .add_attribute("sender", info.sender.as_str());
 
-    Ok(Response::new())
+    Ok(resp)
 }
 
 pub fn donate(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
     let denom = DONATION_DENOM.load(deps.storage)?;
-    let admins = ADMINS.load(deps.storage)?;
+    let admins: Result<Vec<_>, _> = ADMINS
+        .keys(deps.storage, None, None, Order::Ascending)
+        .collect();
+
+    let admins = admins?;
 
     let donation = cw_utils::must_pay(&info, &denom)?.u128();
     let donation_per_admin = donation / (admins.len() as u128);

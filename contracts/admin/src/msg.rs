@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Deps, StdResult};
+use cosmwasm_std::{Addr, Deps, Order, StdResult};
 
 use crate::state::ADMINS;
 
@@ -47,7 +47,10 @@ pub enum ExecuteMsg {
 }
 
 pub fn admins_list(deps: Deps) -> StdResult<AdminsListResp> {
-    let admins = ADMINS.load(deps.storage)?;
+    let admins: Result<Vec<_>, _> = ADMINS
+        .keys(deps.storage, None, None, Order::Ascending)
+        .collect();
+    let admins = admins?;
     let resp = AdminsListResp { admins };
     Ok(resp)
 }
