@@ -30,7 +30,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     use QueryMsg::*;
 
     match msg {
-        Greet {} => to_binary(&msg::greet()?),
         AdminsList {} => to_binary(&msg::admins_list(deps)?),
     }
 }
@@ -52,61 +51,14 @@ pub fn execute(
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary, Addr};
+    use cosmwasm_std::{coins, Addr};
     use cw_multi_test::{App, ContractWrapper, Executor};
 
     use crate::contract::instantiate;
     use crate::error::ContractError;
-    use crate::msg::{AdminsListResp, ExecuteMsg, GreetResp, InstantiateMsg, QueryMsg};
+    use crate::msg::{AdminsListResp, ExecuteMsg, InstantiateMsg, QueryMsg};
 
     use super::{execute, query};
-
-    #[test]
-    fn greet_query_test() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-
-        instantiate(
-            deps.as_mut(),
-            env.clone(),
-            mock_info("sender", &[]),
-            InstantiateMsg::default(),
-        )
-        .unwrap();
-
-        let resp = query(deps.as_ref(), env, QueryMsg::Greet {}).unwrap();
-
-        let resp: GreetResp = from_binary(&resp).unwrap();
-
-        assert_eq!(resp, GreetResp::new("hello world!"),)
-    }
-
-    #[test]
-    fn contract_multi_tests_work() {
-        let mut app = App::default();
-
-        let code = ContractWrapper::new(execute, instantiate, query);
-        let code_id = app.store_code(Box::new(code));
-
-        let addr = app
-            .instantiate_contract(
-                code_id,
-                Addr::unchecked("owner"),
-                &InstantiateMsg::default(),
-                &[],
-                "Contract",
-                None,
-            )
-            .unwrap();
-
-        let resp: GreetResp = app
-            .wrap()
-            .query_wasm_smart(addr, &QueryMsg::Greet {})
-            .unwrap();
-
-        assert_eq!(resp, GreetResp::new("hello world!"),);
-    }
 
     #[test]
     fn instantiate_test() {
