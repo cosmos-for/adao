@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Deps, Order, StdResult};
+use cosmwasm_std::{Addr, Deps, Order, StdResult, Timestamp};
 
 use crate::state::ADMINS;
 
@@ -24,6 +24,8 @@ impl InstantiateMsg {
 pub enum QueryMsg {
     #[returns(AdminsListResp)]
     AdminsList {},
+    #[returns(JoinTimeResp)]
+    JoinTime { admin: String },
 }
 
 #[cw_serde]
@@ -40,6 +42,11 @@ impl AdminsListResp {
 }
 
 #[cw_serde]
+pub struct JoinTimeResp {
+    pub joined: Timestamp,
+}
+
+#[cw_serde]
 pub enum ExecuteMsg {
     AddMemebers { admins: Vec<String> },
     Leave {},
@@ -52,5 +59,12 @@ pub fn admins_list(deps: Deps) -> StdResult<AdminsListResp> {
         .collect();
     let admins = admins?;
     let resp = AdminsListResp { admins };
+    Ok(resp)
+}
+
+pub fn join_time(deps: Deps, admin: String) -> StdResult<JoinTimeResp> {
+    let admin = deps.api.addr_validate(&admin)?;
+    let joined = ADMINS.load(deps.storage, &admin)?;
+    let resp = JoinTimeResp { joined };
     Ok(resp)
 }

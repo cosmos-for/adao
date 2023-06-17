@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use cosmwasm_std::{
-    coins, BankMsg, DepsMut, Empty, Event, MessageInfo, Order, Response, StdResult,
+    coins, BankMsg, DepsMut, Event, MessageInfo, Order, Response, StdResult, Timestamp,
 };
 
 use crate::{
@@ -13,13 +13,8 @@ pub fn add_members(
     deps: DepsMut,
     info: MessageInfo,
     admins: Vec<String>,
+    join_time: &Timestamp,
 ) -> Result<Response, ContractError> {
-    // let mut curr_admins = ADMINS.load(deps.storage)?;
-    // let admins: Result<Vec<_>, _> = ADMINS
-    //     .keys(deps.storage, None, None, Order::Ascending)
-    //     .collect();
-    // let admin = admins?;
-
     if !ADMINS.has(deps.storage, &info.sender) {
         return Err(ContractError::Unauthorized {
             sender: info.sender,
@@ -42,18 +37,9 @@ pub fn add_members(
     for addr in &admins {
         let admin = deps.api.addr_validate(addr)?;
         if !ADMINS.has(deps.storage, &admin) {
-            ADMINS.save(deps.storage, &admin, &Empty {})?;
+            ADMINS.save(deps.storage, &admin, join_time)?;
         }
     }
-
-    // let admins: StdResult<Vec<_>> = admins
-    //     .into_iter()
-    //     .map(|addr| deps.api.addr_validate(&addr))
-    //     .collect();
-
-    // curr_admins.append(&mut admins?);
-
-    // ADMINS.save(deps.storage, &curr_admins)?;
 
     Ok(resp)
 }

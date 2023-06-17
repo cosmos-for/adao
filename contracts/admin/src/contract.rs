@@ -4,21 +4,19 @@ use crate::{
     msg::{self, ExecuteMsg, InstantiateMsg, QueryMsg},
     state::DONATION_DENOM,
 };
-use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
-};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
 use crate::state::ADMINS;
 
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
     for addr in msg.admins {
         let admin = deps.api.addr_validate(&addr)?;
-        ADMINS.save(deps.storage, &admin, &Empty {})?;
+        ADMINS.save(deps.storage, &admin, &env.block.time)?;
     }
 
     DONATION_DENOM.save(deps.storage, &msg.donation_denom)?;
@@ -31,19 +29,20 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
     match msg {
         AdminsList {} => to_binary(&msg::admins_list(deps)?),
+        JoinTime { admin } => to_binary(&msg::join_time(deps, admin)?),
     }
 }
 
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     use ExecuteMsg::*;
 
     match msg {
-        AddMemebers { admins } => exec::add_members(deps, info, admins),
+        AddMemebers { admins } => exec::add_members(deps, info, admins, &env.block.time),
         Leave {} => exec::leave(deps, info).map_err(Into::into),
         Donate {} => exec::donate(deps, info),
     }
@@ -58,7 +57,7 @@ mod tests {
 
     use crate::contract::instantiate;
     use crate::error::ContractError;
-    use crate::msg::{AdminsListResp, ExecuteMsg, InstantiateMsg, QueryMsg};
+    use crate::msg::{AdminsListResp, ExecuteMsg, InstantiateMsg, JoinTimeResp, QueryMsg};
 
     use super::{execute, query};
 
@@ -139,7 +138,7 @@ mod tests {
         let resp = app
             .execute_contract(
                 Addr::unchecked(OWNER),
-                addr,
+                addr.clone(),
                 &ExecuteMsg::AddMemebers {
                     admins: vec![USER.to_owned()],
                 },
@@ -186,6 +185,20 @@ mod tests {
                 .value,
             USER,
         );
+
+        let join_time: JoinTimeResp = app
+            .wrap()
+            .query_wasm_smart(
+                addr,
+                &QueryMsg::JoinTime {
+                    admin: USER.to_owned(),
+                },
+            )
+            .unwrap();
+
+        let now = app.block_info().time;
+
+        assert_eq!(join_time.joined, now);
     }
 
     #[test]
