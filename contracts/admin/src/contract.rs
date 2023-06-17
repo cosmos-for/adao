@@ -289,17 +289,17 @@ mod tests {
             Addr::unchecked("user"),
             addr.clone(),
             &ExecuteMsg::Donate {},
-            &coins(2, "eth"),
+            &coins(3, "eth"),
         )
         .unwrap();
 
-        assert_eq!(get_balance(&app, "user", "eth"), 3,);
+        assert_eq!(get_balance(&app, "user", "eth"), 2,);
 
         assert_eq!(get_balance(&app, "admin1", "eth"), 1,);
 
         assert_eq!(get_balance(&app, "admin2", "eth"), 1,);
 
-        assert_eq!(get_balance(&app, addr.as_str(), "eth"), 0,);
+        assert_eq!(get_balance(&app, addr.as_str(), "eth"), 1,);
     }
 
     fn get_balance(app: &App, addr: &str, denom: &str) -> u128 {
